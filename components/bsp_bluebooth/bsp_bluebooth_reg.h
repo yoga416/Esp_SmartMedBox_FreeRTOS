@@ -1,0 +1,6 @@
+#ifndef _BSP_BLUEBOOTH_REG_H_
+#define _BSP_BLUEBOOTH_REG_H_
+
+
+
+#endif // _BSP_BLUEBOOTH_REG_H_

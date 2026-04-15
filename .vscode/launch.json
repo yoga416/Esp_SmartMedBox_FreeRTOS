@@ -1,0 +1,18 @@
+
+
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "espidf",
+            "name": "ESP-IDF Debug",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "appOffset": "0x10000",
+            "debugPort": 3333,
+            "tclPort": 6666,
+            "jtagClkSpeed": 20000,
+            "elfFilePath": "${workspaceFolder}/build/Esp_SmartMedBox_FreeRTOS.elf"
+        }
+    ]
+}
