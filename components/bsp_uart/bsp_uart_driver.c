@@ -140,6 +140,8 @@ uart_state_t uart_inst(bsp_uart_driver_t *driver,
       driver->receive = uart_receive;
       driver->get_rx_buffered_len = uart_get_rx_buffered_len;
       driver->flush = bsp_uart_flush;
+
+      
       return UART_OK; // 示例返回值
 }
 

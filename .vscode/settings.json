@@ -1,16 +1,11 @@
 {
-  "C_Cpp.intelliSenseEngine": "default",
-  "idf.espIdfPathWin": "d:\\Embedded_Systems_app_install\\Espressif\\frameworks\\esp-idf-v5.1.2",
-  "idf.pythonInstallPath": "d:\\Embedded_Systems_app_install\\Espressif\\tools\\tools\\idf-python\\3.11.2\\python.exe",
-  "idf.openOcdConfigs": [
-    "interface/ftdi/esp32_devkitj_v1.cfg",
-    "target/esp32s3.cfg"
-  ],
+  "idf.flashType": "UART",
+  "idf.currentSetup": "D:\\Embedded_Systems_app_install\\programs_2026\\Espressif\\frameworks\\esp-idf-v5.1.2",
   "idf.portWin": "COM18",
-  "idf.toolsPathWin": "d:\\Embedded_Systems_app_install\\Espressif\\tools",
   "idf.customExtraVars": {
     "IDF_TARGET": "esp32s3"
   },
-  "idf.flashType": "UART",
-  "idf.currentSetup": "d:\\Embedded_Systems_app_install\\Espressif\\frameworks\\esp-idf-v5.1.2"
+  "idf.openOcdConfigs": [
+    "board/esp32s3-builtin.cfg"
+  ]
 }
