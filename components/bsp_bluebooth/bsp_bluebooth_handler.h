@@ -1,6 +1,0 @@
-#ifndef _BSP_BLUEBOOTH_HANDLER_H_
-#define _BSP_BLUEBOOTH_HANDLER_H_
-
-
-
-#endif // _BSP_BLUEBOOTH_HANDLER_H_

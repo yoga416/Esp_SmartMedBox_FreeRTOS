@@ -1,6 +1,9 @@
 {
   "idf.flashType": "UART",
   "idf.currentSetup": "D:\\Embedded_Systems_app_install\\programs_2026\\Espressif\\frameworks\\esp-idf-v5.1.2",
+  "idf.espIdfPathWin": "D:\\Embedded_Systems_app_install\\programs_2026\\Espressif\\frameworks\\esp-idf-v5.1.2",
+  "idf.toolsPathWin": "D:\\Embedded_Systems_app_install\\Espressif",
+  "idf.pythonInstallPath": "D:\\Embedded_Systems_app_install\\Espressif\\python_env\\idf5.1_py3.13_env\\Scripts\\python.exe",
   "idf.portWin": "COM18",
   "idf.customExtraVars": {
     "IDF_TARGET": "esp32s3"
