@@ -10,6 +10,8 @@
 #include <time.h>
 #include "mymqtt.h"
 #include "mqtt_client.h"
+#include "uart.h"
+#include "uart_reg.h"
 // =========================================================================
 // 5. 主函数
 // =========================================================================
@@ -25,6 +27,14 @@ void app_main(void) {
     ntc_init();
     // 启动 MQTT，连接你的服务器（换成你自己的物理机IP或公网云服务器IP）
     mymqtt_init();
+    // 初始化串口
+    app_uart_init();
+
+    // 发送一条测试数据
+    app_uart_send_string("Hello, ESP32-S3 UART works!\r\n");
+
+    // 创建串口接收监听任务 (分配 2048 字节栈空间，优先级设为 5)
+    xTaskCreate(app_uart_receive_task, "uart_rx_task", 2048, NULL, 5, NULL);
     int i=0;
     while(1) {
         

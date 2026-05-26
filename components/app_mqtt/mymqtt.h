@@ -15,16 +15,6 @@
 #define     CLIENT_ID      "ESP32_32" // 设备名称/ID
 #define     PASSWORD       "version=2018-10-31&res=products%2F4N7BMwx111%2Fdevices%2FESP32_32&et=1910271117&method=md5&sign=LjfT94Xmd7V5bIbP4iQNhw%3D%3D" 
 
-    // 完美闭合且属性名对齐的 JSON 格式
-static const char test_data[] = "{"
-    "\"id\": \"123\","
-    "\"version\": \"1.0\","
-    "\"params\": {"
-        "\"temperture\": {"       // 必须与云端属性标识符一模一样
-            "\"value\": 50"       // 尝试发个 50 度过去测试
-        "}"                       // 闭合 test/temperture
-    "}"                           // 闭合 params
-"}";
 
  /* @brief 初始化 MQTT 客户端并连接服务器
  * @param broker_url MQTT 服务器地址，例如 "mqtt://192.168.1.100:1883"

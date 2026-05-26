@@ -7,12 +7,15 @@ idf_component_register(
                  
     # 组件依赖的其他 ESP-IDF 官方组件
     REQUIRES 
-                        components
+                        NTC
+                        wifi
+                        app_mqtt
+                        uart
                         esp_wifi
                         esp_event
                         nvs_flash
                         lwip
                         log
                         driver
-                        mqtt 
+                        mqtt
 )
