@@ -5,16 +5,29 @@
 #include <stdbool.h>
 
 
-#define TOPIC_RELAY            "$sys/4N7BMwx111/ESP32_32/thing/property/relay" // 替换为实际的控制指令主题
-#define TOPIC_SET             "$sys/4N7BMwx111/ESP32_32/thing/property/set"
-#define TOPIC_POST          "$sys/4N7BMwx111/ESP32_32/thing/property/post"
+#define TOPIC_RELAY            "$sys/0124xQpA1l/esp32_526/thing/property/relay" // 替换为实际的控制指令主题
+#define TOPIC_SET             "$sys/0124xQpA1l/esp32_526/thing/property/set"
+#define TOPIC_POST          "$sys/0124xQpA1l/esp32_526/thing/property/post"
+#define TOPIC_POST_REPLY    "$sys/0124xQpA1l/esp32_526/thing/property/post/reply"
 
 
 #define     URI            "mqtt://mqtts.heclouds.com:1883" // 替换为实际 MQTT 服务器地址
-#define     USENAME        "4N7BMwx111" // 所属产品/产品ID(4N7BMwx111)，
-#define     CLIENT_ID      "ESP32_32" // 设备名称/ID
-#define     PASSWORD       "version=2018-10-31&res=products%2F4N7BMwx111%2Fdevices%2FESP32_32&et=1910271117&method=md5&sign=LjfT94Xmd7V5bIbP4iQNhw%3D%3D" 
+#define     USENAME        "0124xQpA1l" // 所属产品/产品ID(0124xQpA1l)，
+#define     CLIENT_ID      "esp32_526" // 设备名称/ID
+#define     PASSWORD       "version=2018-10-31&res=products%2F0124xQpA1l%2Fdevices%2Fesp32_526&et=1910271117&method=md5&sign=LjfT94Xmd7V5bIbP4iQNhw%3D%3D" 
 
+
+static const char test_data[] = "{"
+    "\"id\": \"123\","
+    "\"version\": \"1.0\","
+    "\"params\": {"
+        "\"ambient_humi\": {"
+            "\"value\": 32.2"
+        "}"
+    "}"
+"}";
+
+#define     PASSWORD2_esp32_526      "version=2018-10-31&res=products%2F0124xQpA1l%2Fdevices%2Fesp32_526&et=1910271117&method=md5&sign=caqjMLN3psU9Z8R%2B6otedg%3D%3D"
 
  /* @brief 初始化 MQTT 客户端并连接服务器
  * @param broker_url MQTT 服务器地址，例如 "mqtt://192.168.1.100:1883"

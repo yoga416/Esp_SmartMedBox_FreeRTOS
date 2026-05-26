@@ -8,7 +8,7 @@
 static const char *TAG = "SENSOR_PARSER";
 
 // ==========================================
-// 🚀 协议常量与传感器 ID 定义
+//  ID 定义
 // ==========================================
 #define FRAME_HEADER 0x5A
 #define FRAME_TAIL   0xFF
@@ -39,9 +39,8 @@ uint8_t calc_crc8(const uint8_t *data, uint16_t len) {
 // 🔍 数据帧解析主函数
 // ==========================================
 void parse_sensor_frame(const uint8_t *buffer, uint16_t len) {
-     char report_json[256];
-    // 基础长度拦截：一帧最少 5 字节 (帧头1 + 长度1 + ID1 + 校验1 + 帧尾1)
-    if (len < 5) return;
+    char report_json[256];
+    static uint32_t report_id = 1; // 增加自增 ID，确保每条消息 ID 唯一
 
     // 遍历缓冲区寻找合法帧
     for (uint16_t i = 0; i < len - 4; i++) {
@@ -61,9 +60,6 @@ void parse_sensor_frame(const uint8_t *buffer, uint16_t len) {
                 continue; // 帧尾不对，可能是伪造的帧头，继续往后扫描
             }
 
-            // 3. 提取校验范围数据并计算 CRC8
-            // 校验范围: Length + SensorID + Payload
-            // 数据起点为 buffer[i+1]，校验总长度为 payload_len + 2
             uint8_t expected_crc = buffer[i + payload_len + 3];
             uint8_t calc_crc = calc_crc8(&buffer[i + 1], payload_len + 2);
 
@@ -80,37 +76,67 @@ void parse_sensor_frame(const uint8_t *buffer, uint16_t len) {
                 case SENSOR_SHT40: {
                     if (payload_len == 8) {
                         int32_t raw_temp = 0, raw_hum = 0;
-                        // 小端序直接拷贝解析
                         memcpy(&raw_temp, payload, 4);
                         memcpy(&raw_hum, payload + 4, 4);
                         
-                        // 还原百倍放大
                         float temp = raw_temp / 100.0f;
                         float hum = raw_hum / 100.0f;
-                        ESP_LOGI(TAG, "✅ [SHT40] 温度: %.2f ℃, 湿度: %.2f %%", temp, hum);
-                        
-                sprintf(report_json, 
-                "{\"id\":\"%ld\",\"version\":\"1.0\",\"params\":{\"temperture\":{\"value\":%d}}}", 
-                (long)time(NULL), (int)(hum));
+                        ESP_LOGI(TAG, "✅ [SHT40] 环境温湿度: %.2fC, %.2f%%", temp, hum);
 
-                ESP_LOGW("SENSOR_PARSER", "正在向云端定时定量上报数据: %s", report_json);
-        
-        // 调用封装接口发送
-        mymqtt_publish_data(TOPIC_POST, report_json);
+                        /*上传温度 */
+                        sprintf(report_json, 
+                                "{"
+                            "\"id\": \"%lu\","
+                            "\"version\": \"1.0\","
+                            "\"params\": {"
+                            "\"ambient_temp\": {"
+                            "\"value\": %.1f"
+                            "}"
+                            "}"
+                            "}", 
+                                report_id++, temp);
+                        mymqtt_publish_data(TOPIC_POST, report_json);
 
+                         /*上传湿度 */
+                        sprintf(report_json, 
+                                "{"
+                            "\"id\": \"%lu\","
+                            "\"version\": \"1.0\","
+                            "\"params\": {"
+                            "\"ambient_humi\": {"
+                            "\"value\": %.1f"
+                            "}"
+                            "}"
+                            "}", 
+                                report_id++, hum);
+                        mymqtt_publish_data(TOPIC_POST, report_json);
                     }
                     break;
                 }
                 
                 case SENSOR_MLX90614: {
                     if (payload_len == 8) {
-                        int32_t raw_env = 0, raw_obj = 0;
-                        memcpy(&raw_env, payload, 4);
+                        int32_t raw_obj = 0;
+                        // 这里我们只关心物体温度（人体温度）
                         memcpy(&raw_obj, payload + 4, 4);
                         
-                        float env_temp = raw_env / 100.0f;
                         float obj_temp = raw_obj / 100.0f;
-                        ESP_LOGI(TAG, "✅ [MLX90614] 环境温度: %.2f ℃, 人体温度: %.2f ℃", env_temp, obj_temp);
+                        ESP_LOGI(TAG, "✅ [MLX90614] 体温: %.2fC", obj_temp);
+
+                       /*上传体温 */
+                        sprintf(report_json, 
+                                "{"
+                            "\"id\": \"%lu\","
+                            "\"version\": \"1.0\","
+                            "\"params\": {"
+                            "\"body_temp\": {"
+                            "\"value\": %.1f"
+                            "}"
+                            "}"
+                            "}", 
+                                report_id++, obj_temp);
+                        mymqtt_publish_data(TOPIC_POST, report_json);
+                        ESP_LOGI(TAG, "数据已上传到 MQTT 服务器: %s", report_json);
                     }
                     break;
                 }
@@ -124,12 +150,40 @@ void parse_sensor_frame(const uint8_t *buffer, uint16_t len) {
                         float hr = raw_hr / 100.0f;
                         float spo2 = raw_spo2 / 100.0f;
                         ESP_LOGI(TAG, "✅ [MAX30102] 心率: %.2f bpm, 血氧: %.2f %%", hr, spo2);
+
+                        /*上传心率 */
+                        sprintf(report_json, 
+                                "{"
+                            "\"id\": \"%lu\","
+                            "\"version\": \"1.0\","
+                            "\"params\": {"
+                            "\"heart_rate\": {"
+                            "\"value\": %ld"
+                            "}"
+                            "}"
+                            "}", 
+                        report_id++, (long)hr);
+                        mymqtt_publish_data(TOPIC_POST, report_json);
+
+                        /*上传血氧 */
+                        sprintf(report_json, 
+                                "{"
+                            "\"id\": \"%lu\","
+                            "\"version\": \"1.0\","
+                            "\"params\": {"
+                            "\"spo2\": {"
+                            "\"value\": %ld"
+                            "}"
+                            "}"
+                            "}", 
+                                report_id++, (long)spo2);
+                        mymqtt_publish_data(TOPIC_POST, report_json);
                     }
                     break;
                 }
                 
                 default:
-                    ESP_LOGW(TAG, "⚠️ 未知的传感器 ID: 0x%02X", sensor_id);
+                    ESP_LOGW(TAG, "未知的传感器 ID: 0x%02X", sensor_id);
                     break;
             }
 

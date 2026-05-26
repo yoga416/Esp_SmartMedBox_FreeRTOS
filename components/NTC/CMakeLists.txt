@@ -1,6 +1,6 @@
 idf_component_register(
     SRCS            "ntc.c"
     INCLUDE_DIRS    "."
-    REQUIRES        lwip log
+    REQUIRES        log esp_adc driver
 )
 

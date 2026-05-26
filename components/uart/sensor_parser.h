@@ -12,6 +12,9 @@
 #define SENSOR_SHT40    0x00
 #define SENSOR_MLX90614 0x03
 #define SENSOR_MAX30102 0x04
+#define CMD_RTC_SYNC    0x10
+#define CMD_WEATHER_SYNC 0x11
+#define CMD_LOCATION_SYNC 0x12
 
 uint8_t calc_crc8(const uint8_t *data, uint16_t len) ;
 void parse_sensor_frame(const uint8_t *buffer, uint16_t len) ;

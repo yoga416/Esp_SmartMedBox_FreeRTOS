@@ -21,7 +21,6 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     esp_mqtt_event_handle_t event = event_data;
     esp_mqtt_client_handle_t client = event->client;
     int msg_id;
-    int count = 0;
     switch ((esp_mqtt_event_id_t)event_id) {
     case MQTT_EVENT_CONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED (已成功连接!)");
@@ -32,7 +31,8 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         msg_id = esp_mqtt_client_subscribe(client, TOPIC_SET, 0);
         ESP_LOGI(TAG, "已订阅主题: %s, msg_id=%d", TOPIC_SET, msg_id);
 
-        
+        msg_id = esp_mqtt_client_subscribe(client, TOPIC_POST_REPLY, 0);
+        ESP_LOGI(TAG, "已订阅主题: %s, msg_id=%d", TOPIC_POST_REPLY, msg_id);
 
         break;
         
@@ -80,7 +80,7 @@ void mymqtt_init(void)
     esp_mqtt_client_config_t mqtt_cfg = {
         .broker.address.uri = URI,
         .credentials.username = USENAME, 
-        .credentials.authentication.password = PASSWORD,
+        .credentials.authentication.password = PASSWORD2_esp32_526,
         .credentials.client_id = CLIENT_ID
     };
 
@@ -95,19 +95,30 @@ void mymqtt_init(void)
     esp_mqtt_client_start(g_mqtt_client);
 }
 
-
 bool mymqtt_publish_data(const char *topic, const char *payload)
 {
+    // 调试：打印传入参数，确认是否传入了空指针
+    if (payload == NULL) {
+        ESP_LOGE(TAG, "payload 为 NULL!");
+        return false;
+    }
+
     if (g_mqtt_client == NULL) {
-        ESP_LOGE(TAG, "MQTT 尚未初始化，无法发送!");
+        ESP_LOGE(TAG, "MQTT 客户端实例为空");
         return false;
     }
     
+    // 调试：打印即将发布的内容
+    ESP_LOGI(TAG, "准备发送至主题: %s, 内容: %s", topic, payload);
+
     int msg_id = esp_mqtt_client_publish(g_mqtt_client, topic, payload, 0, 1, 0);
     
     if (msg_id == -1) {
-        ESP_LOGE(TAG, "数据发布失败!");
+        // 调试：如果这里报错，说明底层驱动无法发送
+        ESP_LOGE(TAG, "esp_mqtt_client_publish 返回 -1，请检查连接状态！");
         return false;
     }
+    
+    ESP_LOGI(TAG, "发布成功，消息 ID: %d", msg_id);
     return true;
 }
