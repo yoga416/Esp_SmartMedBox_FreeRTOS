@@ -21,15 +21,17 @@
 void app_main(void) {
     /* Initialize NVS */
     nvs_flash_init();
+
+    // 优先初始化串口，防止 WiFi 连上后发送状态时驱动还没准备好
+    app_uart_init();
+
     /* Initialize Wi-Fi in Station mode */
     wifi_init_STA();
-    vTaskDelay(pdMS_TO_TICKS(2000)); // 等待 Wi-Fi 连接稳定
+    vTaskDelay(pdMS_TO_TICKS(1000)); // 等待 Wi-Fi 连接稳定
     /* Initialize NTC */
     ntc_init();
     // 启动 MQTT，连接你的服务器
     mymqtt_init();
-    // 初始化串口
-    app_uart_init();
 
     // 发送一条测试数据
     app_uart_send_string("Hello, ESP32-S3 UART works!\r\n");

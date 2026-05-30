@@ -124,6 +124,24 @@ void app_uart_send_location(const char *city_name) {
     free(frame);
 }
 
+/**
+ * @brief 发送 WiFi 连接状态到下位机
+ * 格式: [5A] [LEN=1] [ID=0x13] [STATUS] [CRC] [FF]
+ * @param is_success 1: 成功(0x32), 0: 失败(0x23)
+ */
+void app_uart_send_wifi_status(int is_success) {
+    uint8_t frame[6];
+    frame[0] = 0x5A;             // 帧头
+    frame[1] = 1;                // 长度: 1 (Status)
+    frame[2] = CMD_WIFI_STATUS;  // ID
+    frame[3] = is_success ? 0x32 : 0x23; // 数据: 0x32成功, 0x23失败
+    frame[4] = calc_crc8(&frame[1], 3);  // 校验: LEN+ID+DATA
+    frame[5] = 0xFF;             // 帧尾
+
+    app_uart_send_data(frame, 6);
+    ESP_LOGI(TAG, "已发送 WiFi 状态包: %s", is_success ? "连接成功" : "连接失败");
+}
+
 /*
  * @brief FreeRTOS 串口接收任务
  */

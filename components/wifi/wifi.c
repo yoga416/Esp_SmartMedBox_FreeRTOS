@@ -3,7 +3,10 @@
 #include "esp_log.h"
 #include "esp_wifi.h"
 #include "mymqtt.h"
+#include "uart.h"
+
 static const char *TAG = "WIFI";
+static int s_wifi_connected = 0; // 记录当前连接状态
 
 void wifi_event_handler(void* arg, esp_event_base_t event_base,
                         int32_t event_id, void* event_data)
@@ -12,6 +15,8 @@ void wifi_event_handler(void* arg, esp_event_base_t event_base,
         if (event_id == WIFI_EVENT_STA_START) {
             esp_wifi_connect();
         } else if (event_id == WIFI_EVENT_STA_DISCONNECTED) {
+            s_wifi_connected = 0; // 更新状态为断开
+            app_uart_send_wifi_status(0); // 立即通知下位机
             esp_wifi_connect();
         } else if (event_id == WIFI_EVENT_STA_CONNECTED) {
             ESP_LOGI(TAG, "Wi-Fi STA 已连接");
@@ -20,12 +25,24 @@ void wifi_event_handler(void* arg, esp_event_base_t event_base,
     // 必须与上面的 if 平级！
     else if (event_base == IP_EVENT) {
         if (event_id == IP_EVENT_STA_GOT_IP) {
+            s_wifi_connected = 1; // 更新状态为已连接
+            app_uart_send_wifi_status(1); // 立即通知下位机
             esp_netif_ip_info_t* event = (esp_netif_ip_info_t*) event_data;
             ESP_LOGI(TAG, "IP地址: " IPSTR, IP2STR(&event->ip));
         }
     }
 }
 
+/**
+ * @brief 定时同步任务：每20秒强制向下位机同步一次 WiFi 状态
+ */
+static void wifi_status_timer_task(void *pvParameters) {
+    for (;;) {
+        vTaskDelay(pdMS_TO_TICKS(20000)); // 等待 20 秒
+        app_uart_send_wifi_status(s_wifi_connected);
+        ESP_LOGI(TAG, "定时同步 WiFi 状态: %s", s_wifi_connected ? "在线" : "离线");
+    }
+}
 
 /*wifi init*/
 void wifi_init_STA(void)
@@ -73,5 +90,9 @@ void wifi_init_STA(void)
       ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
       /*start wifi*/
       esp_wifi_start();
+      
+      // 创建定时同步任务，每 20 秒发送一次状态
+      xTaskCreate(wifi_status_timer_task, "wifi_status_timer", 2048, NULL, 5, NULL);
+
       ESP_LOGI(TAG, "Wi-Fi init finished");     
 }

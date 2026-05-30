@@ -115,7 +115,7 @@ static void weather_sync_task(void *pvParameters) {
         esp_http_client_cleanup(client); // 清理客户端资源
 
        
-        vTaskDelay(pdMS_TO_TICKS(60 * 60 * 1000)); // 60分钟
+        vTaskDelay(pdMS_TO_TICKS(3*60* 60 * 1000)); // 每3小时同步一次
     }
 }
 }
