@@ -21,6 +21,12 @@ void app_uart_send_weather(int weather_code, int temp);
 // 向下位机发送地理位置同步信息 (城市名称字符串)
 void app_uart_send_location(const char *city_name);
 
+// 向下位机发送服药计划设置信息 (用户ID, 3个时间点)
+void app_uart_send_med_schedule(uint8_t user_id, 
+                                uint8_t h1, uint8_t m1, uint8_t c1,
+                                uint8_t h2, uint8_t m2, uint8_t c2,
+                                uint8_t h3, uint8_t m3, uint8_t c3);
+
 // 向下位机发送 WiFi 连接状态 (1:成功 0:失败)
 void app_uart_send_wifi_status(int is_success);
 

@@ -75,8 +75,7 @@ void app_uart_send_time(int year, int mon, int mday, int hour, int min, int sec)
     frame[10] = 0xFF;            // 帧尾
 
     app_uart_send_data(frame, 11);
-    // ESP_LOGI(TAG, "已发送时间同步包: %02d-%02d-%02d %02d:%02d:%02d", 
-    //          frame[3], frame[4], frame[5], frame[6], frame[7], frame[8]);
+
    
 }
 /**
@@ -122,6 +121,31 @@ void app_uart_send_location(const char *city_name) {
     ESP_LOGI(TAG, "已发送位置同步包: 城市=%s", city_name);
     
     free(frame);
+}
+
+/**
+ * @brief 发送服药计划到下位机
+ * 格式: [5A] [LEN=10] [ID=0x22] [UserID] [H1] [M1] [H2] [M2] [H3] [M3] [C1] [C2] [C3] [CRC] [FF]
+ */
+void app_uart_send_med_schedule(uint8_t user_id, 
+                                uint8_t h1, uint8_t m1, uint8_t c1,
+                                uint8_t h2, uint8_t m2, uint8_t c2,
+                                uint8_t h3, uint8_t m3, uint8_t c3) {
+    uint8_t frame[15];
+    frame[0] = 0x5A;
+    frame[1] = 10; // 长度: UserID(1) + 3*Time(6) + 3*Pills(3) = 10
+    frame[2] = CMD_MED_SCHEDULE_SET;
+    frame[3] = user_id;
+    frame[4] = h1; frame[5] = m1;
+    frame[6] = h2; frame[7] = m2;
+    frame[8] = h3; frame[9] = m3;
+    frame[10] = c1; frame[11] = c2; frame[12] = c3;
+    frame[13] = calc_crc8(&frame[1], 12); // LEN(1) + ID(1) + DATA(10) = 12
+    frame[14] = 0xFF;
+
+    app_uart_send_data(frame, 15);
+    printf("DEBUG: [UART_MODULE] 已向主机发送服药计划: User %d\n", user_id);
+    ESP_LOGI(TAG, "已向主机发送服药计划: User %d", user_id);
 }
 
 /**

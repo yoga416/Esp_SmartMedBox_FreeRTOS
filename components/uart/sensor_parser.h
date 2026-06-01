@@ -16,6 +16,7 @@
 #define CMD_WEATHER_SYNC 0x11
 #define CMD_LOCATION_SYNC 0x12
 #define CMD_WIFI_STATUS   0x13
+#define CMD_MED_SCHEDULE_SET 0x22
 
 uint8_t calc_crc8(const uint8_t *data, uint16_t len) ;
 void parse_sensor_frame(const uint8_t *buffer, uint16_t len) ;
