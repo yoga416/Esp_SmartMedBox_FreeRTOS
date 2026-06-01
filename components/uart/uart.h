@@ -24,6 +24,7 @@ void app_uart_send_location(const char *city_name);
 // 向下位机发送 WiFi 连接状态 (1:成功 0:失败)
 void app_uart_send_wifi_status(int is_success);
 
+
 // FreeRTOS 串口接收监听任务
 void app_uart_receive_task(void *pvParameters);
 

@@ -17,6 +17,7 @@ static const char *TAG = "SENSOR_PARSER";
 #define CMD_UPLOAD_MLX90614 0x03
 #define CMD_UPLOAD_MAX30102 0x04
 #define CMD_UPLOAD_MISSED_MED  0x20  // 新增：漏服记录上传
+#define CMD_MED_SCHEDULE_UPLOAD 0x21 // 新增：服药计划上传
 // ==========================================
 // 🧮 CRC8 校验函数 (多项式 0x07, 初始值 0x00)
 // ==========================================
@@ -129,8 +130,7 @@ void parse_sensor_frame(const uint8_t *buffer, uint16_t len) {
                                 ESP_LOGW(TAG, "未知用户ID: %d", user_id);
                                 break;
                         } 
-                         mymqtt_publish_data(TOPIC_POST, report_json);
-                            }
+                        mymqtt_publish_data(TOPIC_POST, report_json);
                     }
                     break;
                 
@@ -231,7 +231,6 @@ void parse_sensor_frame(const uint8_t *buffer, uint16_t len) {
                     }
                     break;
                 }
-                        break;
 
                 case CMD_UPLOAD_MISSED_MED: {
                     // 解析漏服记录 (例如: payload_len = 7, Payload[0]=顿数, Payload[1~6]=年月日时分秒)
@@ -315,13 +314,56 @@ void parse_sensor_frame(const uint8_t *buffer, uint16_t len) {
                     }
                     break;
                 }
-                
+
+                case CMD_MED_SCHEDULE_UPLOAD: {
+                    // 解析服药计划: 3个时间点*2字节(时,分) + 3个药丸数量 = 9字节
+                    if (payload_len == 9) {
+                        for (int k = 0; k < 3; k++) {
+                            uint8_t hour  = payload[k * 2];
+                            uint8_t min   = payload[k * 2 + 1];
+                            uint8_t count = payload[6 + k];
+                            ESP_LOGI(TAG, "📅 [User %d] 计划 %d: %02d:%02d, 药量: %d 颗", 
+                                     user_id, k + 1, hour, min, count);
+                        }
+
+                        // 动态选择云端标识符 (家庭组模式)
+                        const char* prop_name;
+                        if (user_id == 1)        prop_name = "med_schedules";
+                        else if (user_id == 2)   prop_name = "mechine_time_2";
+                        else  prop_name = "mechine_time_3";
+
+                        // 构造符合 OneNet 数组结构体格式的 JSON
+                        snprintf(report_json, sizeof(report_json),
+                            "{\"id\":\"%lu\",\"version\":\"1.0\",\"params\":{\"%s\":{\"value\":[{"
+                            "\"user_id\":%d,"
+                            "\"time_1\":\"%02d:%02d(%d)\","
+                            "\"time_2\":\"%02d:%02d(%d)\","
+                            "\"time_3\":\"%02d:%02d(%d)\""
+                            "}]}}}",
+                            report_id++,
+                            prop_name,
+                            (int)user_id,
+                            payload[0], payload[1], payload[6],
+                            payload[2], payload[3], payload[7],
+                            payload[4], payload[5], payload[8]
+                        );
+
+                        ESP_LOGI(TAG, "上报 JSON : %s", report_json);
+                        mymqtt_publish_data(TOPIC_POST, report_json);
+                       
+                    } else {
+                        ESP_LOGW(TAG, "服药计划长度错误: %d (预期 9)", payload_len);
+                    }
+                    break;
+                }
                 default:
                     ESP_LOGW(TAG, "未知的 Cmd ID: 0x%02X", cmd_id);
                     break;
-            }
+            
             // 一帧解析成功，将循环索引推移到该帧尾部，避免重复解析
             i += frame_total_len - 1; 
         }
     }
+}
+}
 }
