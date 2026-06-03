@@ -73,10 +73,7 @@ void app_uart_send_time(int year, int mon, int mday, int hour, int min, int sec)
     // 计算 CRC (从 LEN 字段到 Payload 结束)
     frame[9] = calc_crc8(&frame[1], 1 + 1 + frame[1]); 
     frame[10] = 0xFF;            // 帧尾
-
     app_uart_send_data(frame, 11);
-
-   
 }
 /**
  * @brief 发送天气数据到下位机
@@ -91,10 +88,8 @@ void app_uart_send_weather(int weather_code, int temp) {
     frame[4] = (uint8_t)temp;
     frame[5] = calc_crc8(&frame[1], 4); // LEN+ID+Data
     frame[6] = 0xFF;
-
     app_uart_send_data(frame, 7);
     ESP_LOGI(TAG, "已发送天气同步包: 现象代码=%d, 温度=%dC", weather_code, temp);
-   
 }
 
 /**

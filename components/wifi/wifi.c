@@ -38,7 +38,7 @@ void wifi_event_handler(void* arg, esp_event_base_t event_base,
  */
 static void wifi_status_timer_task(void *pvParameters) {
     for (;;) {
-        vTaskDelay(pdMS_TO_TICKS(20000)); // 等待 20 秒
+        vTaskDelay(pdMS_TO_TICKS(2000)); // 等待 2秒
         app_uart_send_wifi_status(s_wifi_connected);
         ESP_LOGI(TAG, "定时同步 WiFi 状态: %s", s_wifi_connected ? "在线" : "离线");
     }

@@ -5,6 +5,8 @@
 #include "sensor_parser.h"
 #include "mymqtt.h"
 #include "mqtt_client.h"
+#include "cJSON.h"
+#include "uart.h"
 static const char *TAG = "SENSOR_PARSER";
 
 // ==========================================
@@ -17,7 +19,12 @@ static const char *TAG = "SENSOR_PARSER";
 #define CMD_UPLOAD_MLX90614 0x03
 #define CMD_UPLOAD_MAX30102 0x04
 #define CMD_UPLOAD_MISSED_MED  0x20  // 新增：漏服记录上传
-#define CMD_MED_SCHEDULE_UPLOAD 0x21 // 新增：服药计划上传
+#define CMD_MED_SCHEDULE_UPLOAD 0x31 // 新增：服药计划上传0x21
+
+
+/*全局变量*/
+static uint32_t temp_threshold =0; 
+static uint32_t humi_threshold =0; 
 // ==========================================
 // 🧮 CRC8 校验函数 (多项式 0x07, 初始值 0x00)
 // ==========================================
@@ -88,8 +95,19 @@ void parse_sensor_frame(const uint8_t *buffer, uint16_t len) {
                         memcpy(&raw_hum, payload + 4, 4);
                         
                         float temp = raw_temp / 100.0f;
-                        float hum = raw_hum / 100.0f;
-                        ESP_LOGI(TAG, "✅ [User %d] 环境温湿度: %.2fC, %.2f%%", user_id, temp, hum);
+                        float humi = raw_hum / 100.0f;
+                        ESP_LOGI(TAG, "✅ [User %d] 环境温湿度: %.2fC, %.2f%%", user_id, temp, humi);
+
+                        /*检查盒内温湿度是否超过阈值*/
+                        if (temp > temp_threshold) {
+                            ESP_LOGW(TAG, "⚠️ 温度 %.2fC 超过阈值!", temp);  
+                            /*可以上传，可以下发给主机*/  
+                        }
+                        if(humi > humi_threshold) {
+                            ESP_LOGW(TAG, "⚠️ 湿度 %.2f%% 超过阈值!", humi);  
+                            /*可以上传，可以下发给主机*/    
+                        }
+                         /*向云端同步*/
                         /*根据user_id选择ison文本*/
                         switch (user_id) {
                             case 1:
@@ -101,7 +119,7 @@ void parse_sensor_frame(const uint8_t *buffer, uint16_t len) {
                                     "\"ambient_temp\": {\"value\": %.1f},"
                                     "\"ambient_humi\": {\"value\": %.1f}"
                                 "}"
-                            "}", report_id++,temp, hum);
+                            "}", report_id++,temp, humi);
                                 break;
 
                             case 2:
@@ -113,7 +131,7 @@ void parse_sensor_frame(const uint8_t *buffer, uint16_t len) {
                                     "\"user2_ambient_temp\": {\"value\": %.1f},"
                                     "\"user2_ambient_humi\": {\"value\": %.1f}"
                                 "}"
-                            "}", report_id++,temp, hum);
+                            "}", report_id++,temp, humi);
                                 break;
                             case 3:
                                sprintf(report_json, 
@@ -124,7 +142,7 @@ void parse_sensor_frame(const uint8_t *buffer, uint16_t len) {
                                     "\"user3_ambient_temp\": {\"value\": %.1f},"
                                     "\"user3_ambient_humi\": {\"value\": %.1f}"
                                 "}"
-                            "}", report_id++,temp, hum);
+                            "}", report_id++,temp, humi);
                                 break;
                             default:
                                 ESP_LOGW(TAG, "未知用户ID: %d", user_id);
@@ -330,7 +348,7 @@ void parse_sensor_frame(const uint8_t *buffer, uint16_t len) {
                         const char* prop_name;
                         if (user_id == 1)        prop_name = "med_schedules";
                         else if (user_id == 2)   prop_name = "mechine_time_2";
-                        else  prop_name = "mechine_time_3";
+                        else                     prop_name = "mechine_time_3";
 
                         // 构造符合 OneNet 数组结构体格式的 JSON
                         snprintf(report_json, sizeof(report_json),
@@ -366,4 +384,196 @@ void parse_sensor_frame(const uint8_t *buffer, uint16_t len) {
     }
 }
 }
+}
+
+/*用户1的用药时间的下发*/
+void parse_medication_schedule_1(cJSON *value_arr)
+{
+
+    int count = cJSON_GetArraySize(value_arr);
+    for (int i = 0; i < count; i++) {
+        cJSON *schedule = cJSON_GetArrayItem(value_arr, i);
+        if (schedule == NULL) continue;
+
+        cJSON *uid_obj = cJSON_GetObjectItem(schedule, "user_id");
+        cJSON *t1_obj = cJSON_GetObjectItem(schedule, "time_1");
+        cJSON *t2_obj = cJSON_GetObjectItem(schedule, "time_2");
+        cJSON *t3_obj = cJSON_GetObjectItem(schedule, "time_3");
+
+        if (!uid_obj || !t1_obj || !t2_obj || !t3_obj) {
+            ESP_LOGW(TAG, "节点数据不完整，跳过");
+            continue;
+        }
+
+        int user_id = uid_obj->valueint;
+        const char *time_1 = t1_obj->valuestring;
+        const char *time_2 = t2_obj->valuestring;
+        const char *time_3 = t3_obj->valuestring;
+
+        ESP_LOGI(TAG, ">>> [User %d] 原始数据: T1:%s, T2:%s, T3:%s", user_id, time_1, time_2, time_3);
+
+        int h1, m1, c1, h2, m2, c2, h3, m3, c3;
+        if (sscanf(time_1, "%d:%d(%d)", &h1, &m1, &c1) == 3 &&
+            sscanf(time_2, "%d:%d(%d)", &h2, &m2, &c2) == 3 &&
+            sscanf(time_3, "%d:%d(%d)", &h3, &m3, &c3) == 3) 
+        {
+            ESP_LOGI(TAG, "成功解析服药计划: user_id: %d", user_id);
+            app_uart_send_med_schedule((uint8_t)user_id, 
+                                       (uint8_t)h1, (uint8_t)m1, (uint8_t)c1,
+                                       (uint8_t)h2, (uint8_t)m2, (uint8_t)c2,
+                                       (uint8_t)h3, (uint8_t)m3, (uint8_t)c3);
+        } else {
+            ESP_LOGE(TAG, "字符串解析失败 (格式应为 HH:MM(Count))");
+        }
+    }
+}
+
+/*用户2的用药时间的下发*/
+void parse_medication_schedule_2(cJSON *value_arr)
+{
+    parse_medication_schedule_1(value_arr);
+}
+
+/*用户3的用药时间的下发*/
+void parse_medication_schedule_3(cJSON *value_arr)
+{
+    parse_medication_schedule_1(value_arr);
+}
+
+/* led控制 */
+void parse_led_control(cJSON *content)
+{
+    int state = 0;
+    static uint32_t report_id = 1;
+    // 1. 完美兼容：如果是布尔型 (true/false)
+    if (cJSON_IsBool(content)) {
+        state = cJSON_IsTrue(content) ? 1 : 0;
+    }
+    // 2. 完美兼容：如果云端改发数字 (1/0)
+    else if (cJSON_IsNumber(content)) {
+        state = content->valueint;
+    }
+    ESP_LOGI(TAG, "解析到LED控制指令: %d", state);
+    uint8_t frame[10];
+    frame[0] = FRAME_HEADER;
+    frame[1] = 0x02; // Payload 长度
+    frame[2] = CMD_LED_CONTROL; 
+    frame[3] = 0x01; //定死的用户ID
+    frame[4] = (uint8_t)state; // LED 状态
+    frame[5] = calc_crc8(&frame[1], 4);// 计算 CRC8，参与校验的字段是 Length + Cmd_ID + User_ID + Payload = 2 + 1 + 1 + 1 = 5 字节
+    frame[6] = FRAME_TAIL;
+    app_uart_send_data(frame, 7);
+        /*向云端同步*/
+    /* LED 同步代码修复 (蜂鸣器同理，只需改键值 BAZZER_STATUS) */
+char report_json[128];
+snprintf(report_json, sizeof(report_json),
+         "{"
+         "\"id\":\"%lu\","
+         "\"version\":\"1.0\","
+         "\"params\":{"
+         "\"LED_STATUS\":{"
+         "\"value\":%s"
+         "}"
+         "}"
+         "}",
+         report_id++,
+         state ? "true" : "false");
+mymqtt_publish_data(TOPIC_POST, report_json);   
+  
+}
+
+/* 蜂鸣器控制 */
+void parse_buzzer_control(cJSON *content)
+{
+    int state = 0;
+static uint32_t report_id = 1;
+    // 1. 完美兼容：如果是布尔型 (true/false)
+    if (cJSON_IsBool(content)) {
+        state = cJSON_IsTrue(content) ? 1 : 0;
+    }
+    // 2. 完美兼容：如果云端改发数字 (1/0)
+    else if (cJSON_IsNumber(content)) {
+        state = content->valueint;
+    }
+
+    ESP_LOGI(TAG, "解析到蜂鸣器控制指令: %d", state);
+
+    // 后面打包发送给下位机（STM32/CH32）的串口逻辑保持不变
+    uint8_t frame[7];
+    frame[0] = FRAME_HEADER;
+    frame[1] = 0x02; 
+    frame[2] = CMD_BUZZER_CONTROL; // 你的蜂鸣器命令ID
+    frame[3] = 0x01; 
+    frame[4] = (uint8_t)state;     // 此时 state 就能正确对应 1 或 0 了
+    frame[5] = calc_crc8(&frame[1], 4);
+    frame[6] = FRAME_TAIL;
+    
+    app_uart_send_data(frame, 7);
+    /*向云端同步*/
+    char report_json[128];
+    snprintf(report_json, sizeof(report_json),
+         "{"
+         "\"id\":\"%lu\","
+         "\"version\":\"1.0\","
+         "\"params\":{"
+         "\"BAZZER_STATUS\":{"
+         "\"value\":%s"
+         "}"
+         "}"
+         "}",
+         report_id++,
+         state ? "true" : "false");   
+    mymqtt_publish_data(TOPIC_POST, report_json);
+}
+
+/* 温度阈值设置 */
+void parse_set_temp_threshold(cJSON *content)
+{
+    static uint32_t report_id = 1;
+     float threshold = cJSON_IsNumber(content) ? content->valuedouble : 0.0f;
+     temp_threshold = (uint32_t)(threshold); // 转换为整数形式，单位是0.01度
+    ESP_LOGI(TAG, "解析到温度阈值设置指令: %.1f", threshold);
+     /*向云端同步*/
+char report_json[128];
+
+snprintf(report_json, sizeof(report_json),
+         "{"
+         "\"id\":\"%lu\","
+         "\"version\":\"1.0\","
+         "\"params\":{"
+         "\"Temperature_Threshold\":{"
+         "\"value\":%.1f"
+         "}"
+         "}"
+         "}",
+         report_id++,
+         threshold);
+
+mymqtt_publish_data(TOPIC_POST, report_json);
+}
+
+/* 湿度阈值设置 */
+void parse_set_humi_threshold(cJSON *content)
+{
+    static uint32_t report_id = 1;
+   float threshold = cJSON_IsNumber(content) ? content->valuedouble : 0.0f;
+   humi_threshold = (uint32_t)(threshold); // 转换为整数形式，单位是0.01%
+    ESP_LOGI(TAG, "解析到湿度阈值设置指令: %.1f", threshold);
+     /*向云端同步*/
+char report_json[128];
+
+snprintf(report_json, sizeof(report_json),
+         "{"
+         "\"id\":\"%lu\","
+         "\"version\":\"1.0\","
+         "\"params\":{"
+         "\"Humidity_Threshold\":{"
+         "\"value\":%.1f"
+         "}"
+         "}"
+         "}",
+         report_id++,
+         threshold);
+
+mymqtt_publish_data(TOPIC_POST, report_json);
 }

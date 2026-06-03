@@ -12,22 +12,20 @@ static void time_sync_task(void *pvParameters) {
     struct tm timeinfo;
     time_t nowtime;
 
-    while(1) {
+    for (;;) {
         nowtime = time(NULL); 
         timeinfo = *localtime(&nowtime); 
 
         if (timeinfo.tm_year + 1900 > 2000) {
-            // ESP_LOGI(TAG, "下发同步时间: %04d-%02d-%02d %02d:%02d:%02d", 
-            //          timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
-            //          timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
-            
             app_uart_send_time(timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
                                timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
         } else {
             ESP_LOGW(TAG, "等待 SNTP 网络对时...");
         }
 
-        vTaskDelay(pdMS_TO_TICKS(10000)); 
+
+
+        vTaskDelay(pdMS_TO_TICKS(2000)); // 每2秒同步一次时间
     }
 }
 

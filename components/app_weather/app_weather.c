@@ -28,7 +28,7 @@ static const char *TAG = "WEATHER_SYNC";
 
 static void weather_sync_task(void *pvParameters) {
     // 等待系统稳定和网络连接成功后再开始第一次同步
-    vTaskDelay(pdMS_TO_TICKS(5000)); 
+    vTaskDelay(pdMS_TO_TICKS(2000)); // 等待2秒
     
     char local_response_buffer[MAX_HTTP_RECV_BUFFER] = {0};
 
@@ -46,7 +46,7 @@ static void weather_sync_task(void *pvParameters) {
         // 如果年份小于 2000，说明 SNTP 还没对时成功，天气请求会因为证书/时间校验失败
         if (timeinfo.tm_year + 1900 < 2000) {
             ESP_LOGW(TAG, "等待网络对时中 (SNTP)...");
-            vTaskDelay(pdMS_TO_TICKS(5000));
+            vTaskDelay(pdMS_TO_TICKS(2000)); // 每2秒检查一次
             continue;
         }
 

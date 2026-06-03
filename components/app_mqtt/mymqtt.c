@@ -11,7 +11,7 @@ static const char *TAG = "MY_MQTT";
 // 全局 MQTT 客户端句柄 (非常重要，不要在局部被覆盖)
 static esp_mqtt_client_handle_t g_mqtt_client = NULL;
 void handle_onenet_set_schedule(const char *json_data, int data_len);
-
+void handle_onenet_set(const char *json_data, int data_len);
 static void log_error_if_nonzero(const char *message, int error_code)
 {
     if (error_code != 0) {
@@ -60,10 +60,22 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         ESP_LOGI(TAG, "MQTT_EVENT_DATA (收到下发数据)");
         printf("TOPIC=%.*s\r\n", event->topic_len, event->topic);
         printf("DATA=%.*s\r\n", event->data_len, event->data);
+
+        // --- 第一层分流：根据 Topic 主题分流 ---
         
+        // 1. 属性设置主题 (通常是 JSON 格式，如 med_schedule)
         if (strncmp(event->topic, TOPIC_SET, event->topic_len) == 0) {
-            // 进入解析和主机同步流程
-            handle_onenet_set_schedule(event->data, event->data_len);
+            handle_onenet_set(event->data, event->data_len);
+        }
+        // 2. 继电器/控制指令主题 (可能是简单的 0/1 或特定指令)
+        else if (strncmp(event->topic, TOPIC_RELAY, event->topic_len) == 0) {
+            ESP_LOGI(TAG, "收到控制指令!");
+            // 这里可以直接处理，或者分发给专门的控制函数
+            // handle_control_command(event->data, event->data_len);
+        }
+        // 3. 其它自定义主题
+        else {
+            ESP_LOGW(TAG, "收到未定义主题的数据");
         }
         break;
 
@@ -132,7 +144,7 @@ bool mymqtt_publish_data(const char *topic, const char *payload)
 }
 
 // 处理 OneNet 下发的属性设置指令
-void handle_onenet_set_schedule(const char *json_data, int data_len)
+void handle_onenet_set(const char *json_data, int data_len)
 {
     ESP_LOGI(TAG, "处理 OneNet 下发的属性设置指令，数据长度: %d", data_len);
     ESP_LOGI(TAG, "原始 JSON 数据: %.*s", data_len, json_data);
@@ -169,70 +181,60 @@ void handle_onenet_set_schedule(const char *json_data, int data_len)
     cJSON *item = NULL;
     cJSON_ArrayForEach(item, params) {
         const char *identifier = item->string;
-        ESP_LOGI(TAG, "检测到属性标识符: %s", identifier);
+        ESP_LOGI(TAG, "解析到功能标识符: %s", identifier);
 
-        // 获取该属性下的 "value" 数组
-        cJSON *value_arr = cJSON_GetObjectItem(item, "value");
-        if (value_arr == NULL || !cJSON_IsArray(value_arr)) {
-            // 有些情况下云端可能不带 "value" 直接下发数组内容
-            if (cJSON_IsArray(item)) {
-                value_arr = item;
-            } else {
-                continue;
-            }
+        // 获取该标识符对应的 "value" (OneNet 既可能直接下发数据，也可能包裹在 value 里)
+        cJSON *value_obj = cJSON_GetObjectItem(item, "value");
+        cJSON *content = value_obj ? value_obj : item;
+
+        // ==========================================
+        // 🚀 内容分流 (Internal Dispatching)
+        // ==========================================
+        
+        // 用户1的用药时间
+        if (strcmp(identifier, "med_schedules") == 0) {
+            ESP_LOGI(TAG, ">>> 进入 [用户1服药排班] 分流分支");
+            parse_medication_schedule_1(content);
+            parse_success = true;
         }
-
-        // 5. 遍历数组中的每个用户计划
-        int count = cJSON_GetArraySize(value_arr);
-        for (int i = 0; i < count; i++) {
-            cJSON *schedule = cJSON_GetArrayItem(value_arr, i);
-            if (schedule == NULL) continue;
-
-            cJSON *uid_obj = cJSON_GetObjectItem(schedule, "user_id");
-            cJSON *t1_obj = cJSON_GetObjectItem(schedule, "time_1");
-            cJSON *t2_obj = cJSON_GetObjectItem(schedule, "time_2");
-            cJSON *t3_obj = cJSON_GetObjectItem(schedule, "time_3");
-
-            if (!uid_obj || !t1_obj || !t2_obj || !t3_obj) {
-                ESP_LOGW(TAG, "节点数据不完整，跳过");
-                continue;
-            }
-
-            int user_id = uid_obj->valueint;
-            const char *time_1 = t1_obj->valuestring;
-            const char *time_2 = t2_obj->valuestring;
-            const char *time_3 = t3_obj->valuestring;
-
-            ESP_LOGI(TAG, ">>> [User %d] 原始数据: T1:%s, T2:%s, T3:%s", 
-                     user_id, time_1, time_2, time_3);
-
-            // 6. 提取时间与药量 (HH:MM(C) 格式)
-            int h1, m1, c1, h2, m2, c2, h3, m3, c3;
-            if (sscanf(time_1, "%d:%d(%d)", &h1, &m1, &c1) == 3 &&
-                sscanf(time_2, "%d:%d(%d)", &h2, &m2, &c2) == 3 &&
-                sscanf(time_3, "%d:%d(%d)", &h3, &m3, &c3) == 3) 
-            {
-                ESP_LOGI(TAG, "成功解析服药计划: \n"
-                         "  user_id: %d\n"
-                         "  T1: %02d:%02d (%d颗)\n"
-                         "  T2: %02d:%02d (%d颗)\n"
-                         "  T3: %02d:%02d (%d颗)",
-                         user_id, h1, m1, c1, h2, m2, c2, h3, m3, c3);
-                
-                // --- 调试：进入发送前确认 ---
-                ESP_LOGI(TAG, "正在调用串口发送函数...");
-
-                app_uart_send_med_schedule((uint8_t)user_id, 
-                                           (uint8_t)h1, (uint8_t)m1, (uint8_t)c1,
-                                           (uint8_t)h2, (uint8_t)m2, (uint8_t)c2,
-                                           (uint8_t)h3, (uint8_t)m3, (uint8_t)c3);
-                
-                ESP_LOGI(TAG, "串口发送函数调用结束。");
-                parse_success = true;
-            } 
-            else {
-                ESP_LOGE(TAG, "字符串解析失败 (格式应为 HH:MM(Count))");
-            }
+        //用户2的用药时间
+         else if (strcmp(identifier, "mechine_time_2") == 0) {
+            ESP_LOGI(TAG, ">>> 进入 [用户2服药排班] 分流分支");
+            parse_medication_schedule_2(content);
+            parse_success = true;
+        }
+        //用户3的用药时间
+         else if (strcmp(identifier, "mechine_time_3") == 0) {
+            ESP_LOGI(TAG, ">>> 进入 [用户3服药排班] 分流分支");
+            parse_medication_schedule_3(content);
+            parse_success = true;
+        }
+        // led控制
+        else if (strcmp(identifier, "LED_STATUS") == 0) {
+            ESP_LOGI(TAG, ">>> 进入 [LED控制] 分流分支");
+           parse_led_control(content);
+           parse_success = true;
+        }
+        // 蜂鸣器控制
+        else if (strcmp(identifier, "BAZZER_STATUS") == 0) {
+            ESP_LOGI(TAG, ">>> 进入 [蜂鸣器控制] 分流分支");
+            parse_buzzer_control(content);
+            parse_success = true;
+        }
+        //  温度阈值数据下发
+        else if (strcmp(identifier, "Temperature_Threshold") == 0) {
+            ESP_LOGI(TAG, ">>> 进入 [温度阈值] 分流分支");
+            parse_set_temp_threshold(content);
+            parse_success = true;
+        }
+        // 湿度阈值数据下发
+        else if (strcmp(identifier, "Humidity_Threshold") == 0) {
+            ESP_LOGI(TAG, ">>> 进入 [湿度阈值] 分流分支");
+            parse_set_humi_threshold(content);
+            parse_success = true;
+        }
+        else {
+            ESP_LOGW(TAG, "未定义的标识符: %s, 无法分流处理", identifier);
         }
     }
 
